@@ -7,6 +7,8 @@ Project: amortization and inference gaps in VAEs, based on
 - Cremer, Li & Duvenaud (2018), *Inference Suboptimality in Variational Autoencoders*
 - Margossian & Blei (2024), *Amortized Variational Inference: When and Why?*
 
+# By Bastien Jacques and Nathan Ugwonali
+
 ## Setup
 
 This repo has its own environment, managed with [uv](https://docs.astral.sh/uv/) (Python 3.12, pinned in `.python-version`). Dependencies are listed in `pyproject.toml`.
