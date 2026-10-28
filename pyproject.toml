@@ -1,0 +1,42 @@
+[project]
+name = "mva3842-pgm"
+version = "0.1.0"
+description = "MVA3842 course work: inference suboptimality and amortized variational inference in VAEs"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    # Core numerics / deep learning
+    "numpy",
+    "scipy",
+    "torch",
+    "torchvision",
+    "einops",
+    # Probabilistic programming (flows, distributions, course labs)
+    "pyro-ppl",
+    "pgmpy",
+    # Experiment tracking / config
+    "wandb",
+    "python-dotenv",
+    "tqdm",
+    # Analysis / plotting
+    "pandas",
+    "matplotlib",
+    "seaborn",
+    "scikit-learn",
+    # Notebooks
+    "jupyterlab",
+    "ipykernel",
+    "ipywidgets",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
