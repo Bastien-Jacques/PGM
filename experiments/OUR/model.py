@@ -44,9 +44,3 @@ class decoder(nn.Module):
         return output     #(B, 784)
 
 
-
-
-enc = encoder(784, 100, 2).to(device)
-dec = decoder(2, 100, 784).to(device)
-
-
