@@ -17,30 +17,40 @@ device = "cuda" if torch.cuda.is_available() else "cpu" #for gpu use
 
 ## Encoder ##
 
+ACTIVATIONS = {"tanh": nn.Tanh, "relu": nn.ReLU, "elu": nn.ELU}
+
+def make_mlp(in_dim: int, hidden_dims: list, act: str):
+    layers, d = [], in_dim
+    for h in hidden_dims:
+        layers.append(nn.Linear(d, h))
+        layers.append(ACTIVATIONS[act]())     
+        d = h                                
+    return nn.Sequential(*layers)
+
+
 class encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dim, latent_dim):
+    def __init__(self, input_dim, hidden_dims, latent_dim, act = 'tanh'):
         super().__init__()
-        self.l1 = nn.Linear(input_dim, hidden_dim)
-        self.l2 = nn.Linear(hidden_dim, latent_dim)
-        self.l3 = nn.Linear(hidden_dim, latent_dim)
+        self.trunk = make_mlp(input_dim, hidden_dims, act)
+        self.mu = nn.Linear(hidden_dims[-1], latent_dim)
+        self.logsigma = nn.Linear(hidden_dims[-1], latent_dim)
 
     def forward(self, x):
-        h = torch.tanh(self.l1(x))
-        return self.l2(h), self.l3(h)
+        h = self.trunk(x)
+        mu, logsigma = self.mu(h), self.logsigma(h)
+        return mu, logsigma
 
 
 ## Decoder ##
 
 class decoder(nn.Module):
-    def __init__(self, latent_dim, hidden_dim, outpout_dim):
+    def __init__(self, latent_dim, hidden_dims, output_dim, act = 'tanh'):
         super().__init__()
-        self.l1 = nn.Linear(latent_dim, hidden_dim)
-        self.l2 = nn.Linear(hidden_dim, outpout_dim)
+        self.trunk = make_mlp(latent_dim, hidden_dims, act)
+        self.logits = nn.Linear(hidden_dims[-1], output_dim)
 
     def forward(self, z):
-        h = torch.tanh(self.l1(z))
-        output = self.l2(h)
+        h = self.trunk(z)
+        logits = self.logits(h)
 
-        return output     #(B, 784)
-
-
+        return logits     #(B, 784)
