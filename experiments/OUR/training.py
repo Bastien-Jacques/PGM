@@ -29,7 +29,7 @@ epochs = 300
 
 config = dict(model="vae", seed=0, hidden_dim=100, latent_dim=2,
               lr=1e-4, batch_size=50, epochs=300, family="FFG")
-run = wandb.init(project="encoder-glasses", config=config, name=f"vae_h100_seed0")
+run = wandb.init(project="PGM", config=config, name=f"vae_h100_seed0")
 
 best_val = float("inf")  
 for epoch in range(epochs):
