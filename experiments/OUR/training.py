@@ -57,6 +57,13 @@ for epoch in range(epochs):
 
     wandb.log({"epoch": epoch, "train_loss": train_loss_tot/N, "val_loss": val_loss_tot})
  
+art = wandb.Artifact(name="vae_h100_seed0", type="model",
+                     metadata={"best_validation": best_val})
+art.add_file("/kaggle/working/enc_vae.pt")
+art.add_file("/kaggle/working/dec_vae.pt")
+run.log_artifact(art)
+
+#save best weights of the model on wandB directly
 
 run.finish() # wandb end
 
