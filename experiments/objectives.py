@@ -1,9 +1,12 @@
+import math as m
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal, Independent, kl_divergence
 
-def ELBO(x, enc, dec, family = 'ffg', reduce = True):
+
+def elbo(x, enc, dec, family = 'ffg', reduce = True):  #Used for the taining in VAE mode with FFG
     mu, logsigma = enc(x)
     z = mu + torch.exp(logsigma)*torch.randn_like(mu)
     logits = dec(z)
@@ -23,3 +26,12 @@ def ELBO(x, enc, dec, family = 'ffg', reduce = True):
     elbo = reconstruction - kl # training minimizes - ELBO
 
     return elbo.mean() if reduce else elbo #returns the average loss on a batch if redude, else the elbo per data 
+
+
+def elbo_flow_mc(x, dec, flow, S=64):
+    #x is a single binarized image from the dataset, shape (784,)
+    z, log_q = flow.sample(S) #(S,2); (S,)
+    logits = dec(z)
+    log_lik = x @ F.logsigmoid(logits).T + (1 - x) @ F.logsigmoid(-logits).T   #(S,)  remember that sigma(-y) = 1 - sigma(y) for sigmoid function 
+    log_prior = -0.5*(z**2).sum(-1) - m.log(2*m.pi)  #(S,)
+    return (log_lik + log_prior - log_q).mean()
