@@ -4,10 +4,6 @@ import torch
 import torch.nn.functional as F
 
 
-data = torch.load("mnist_bin.pt")
-X_val = data['val']
-
-
 def make_grid(L, n, device = 'cpu'):
     g = torch.linspace(-L, L, n, device = device) #one segment between -L and L with n points
     Z = torch.cartesian_prod(g,g)                 #cartesian product of 2 segments = [-L,L]^2: grid of n*n squares
