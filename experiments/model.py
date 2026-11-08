@@ -111,7 +111,7 @@ class Flow2D(nn.Module):
 
     def sample(self, S):
         # S reparameterised samples z_K and their log density log q(z_K)
-        z = self.mu + torch.exp(self.logsigma) * torch.randn(S, 2)
+        z = self.mu + torch.exp(self.logsigma) * torch.randn(S, 2, device=self.mu.device)
         log_q = self.log_q0(z)
         for layer in self.layers:
             z, log_det = layer(z)
