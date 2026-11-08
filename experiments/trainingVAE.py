@@ -17,6 +17,7 @@ p.add_argument("--lr", type=float, default=1e-4)
 p.add_argument("--batch_size", type=int, default=50)
 p.add_argument("--epochs", type=int, default=300)
 p.add_argument("--seed", type=int, default=0)
+p.add_argument("family", type = str, default = "ffg")
 p.add_argument("--project", type=str, default="PGM")
 args = p.parse_args()
 
