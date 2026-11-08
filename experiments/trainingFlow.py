@@ -72,7 +72,7 @@ for step in range(steps):
 with torch.no_grad():
     final_elbo = elbo_flow_mc(x, dec, flow, 20_000).item()
     Z, log_prior, log_dA = make_grid(4.0, 400, device=device)
-    lpx = log_px(x, Z, dec, log_prior, log_dA)
+    lpx = log_px(x[None], Z, dec, log_prior, log_dA).item()   # batch of one image -> float
 
 run.summary["final_elbo"] = final_elbo #final elbo (after 3000 steps)
 run.summary["log_px"] = lpx            #log evidence log p(x) after 3000 steps
