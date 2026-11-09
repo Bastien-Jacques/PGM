@@ -24,6 +24,7 @@ p.add_argument("--seed", type=int, default=0)
 p.add_argument("--split", type=str, default="train")
 p.add_argument("--idx", type=int, default=0)
 p.add_argument("--project", type=str, default="PGM")
+p.add_argument("--idx", type = int, default = 0)
 args = p.parse_args()
 
 torch.manual_seed(args.seed)
@@ -58,29 +59,26 @@ artifact_dir = artifact.download()
 _, dec = load_vae(artifact_dir, run_name_vae, hidden_dims, latent_dim=2, act="tanh", input_dim=784)
 dec = dec.to(device).requires_grad_(False) #gradient not needed since the decoder is already trained: frozen decoder
 
+x_val = X_val[args.idx]
+x_val = x_val.to(device)
 
-idx = [221, 291, 394]
-X_val_desired =  X_val[idx]
-
-for x_val in X_val_desired:
-    x_val = x_val.to(device)
-
-    for step in range(steps):
-        loss = -elbo_flow_mc(x_val, dec, flow, S) #scalar, - to minimize
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        if step%10 ==0: wandb.log({"neg_elbo": loss.item()}, step=step) #log the loss every 10 steps
+for step in range(steps):
+    loss = -elbo_flow_mc(x_val, dec, flow, S) #scalar, - to minimize
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    if step%10 ==0: wandb.log({"neg_elbo": loss.item()}, step=step) #log the loss every 10 steps
 
     # final evaluation with many samples, so the reported ELBO is not noisy
-    with torch.no_grad():
-        final_elbo = elbo_flow_mc(x_val, dec, flow, 20_000).item()
-        Z, log_prior, log_dA = make_grid(4.0, 400, device=device)
-        lpx = log_px(x_val[None], Z, dec, log_prior, log_dA).item()   # batch of one image -> float
+with torch.no_grad():
+    final_elbo = elbo_flow_mc(x_val, dec, flow, 20_000).item()
+    Z, log_prior, log_dA = make_grid(4.0, 400, device=device)
+    lpx = log_px(x_val[None], Z, dec, log_prior, log_dA).item()   # batch of one image -> float
 
-    run.summary["final_elbo"] = final_elbo #final elbo (after 3000 steps)
-    run.summary["log_px"] = lpx            #log evidence log p(x) after 3000 steps
-    run.summary["kl_flow"] = lpx - final_elbo #kl divergence between true evidence p(x) and flow evidence q_flow(x)
+run.summary["final_elbo"] = final_elbo #final elbo (after n_steps steps)
+run.summary["log_px"] = lpx            #log evidence log p(x) after n_steps steps
+run.summary["kl_flow"] = lpx - final_elbo #kl divergence between true evidence p(x) and flow evidence q_flow(x)
+
 
 path = f"/kaggle/working/{run_name}.pt"
 torch.save(flow.state_dict(), path)
