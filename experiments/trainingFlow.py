@@ -24,7 +24,6 @@ p.add_argument("--seed", type=int, default=0)
 p.add_argument("--split", type=str, default="train")
 p.add_argument("--idx", type=int, default=0)
 p.add_argument("--project", type=str, default="PGM")
-p.add_argument("--idx", type = int, default = 0)
 args = p.parse_args()
 
 torch.manual_seed(args.seed)
