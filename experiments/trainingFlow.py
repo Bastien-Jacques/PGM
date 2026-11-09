@@ -59,24 +59,28 @@ _, dec = load_vae(artifact_dir, run_name_vae, hidden_dims, latent_dim=2, act="ta
 dec = dec.to(device).requires_grad_(False) #gradient not needed since the decoder is already trained: frozen decoder
 
 
-x = data[args.split][args.idx].to(device)  
+idx = [221, 291, 394]
+X_val_desired =  X_val[idx]
 
-for step in range(steps):
-    loss = -elbo_flow_mc(x, dec, flow, S) #scalar, - to minimize
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-    if step%10 ==0: wandb.log({"neg_elbo": loss.item()}, step=step) #log the loss every 10 steps
+for x_val in X_val_desired:
+    x_val = x_val.to(device)
 
-# final evaluation with many samples, so the reported ELBO is not noisy
-with torch.no_grad():
-    final_elbo = elbo_flow_mc(x, dec, flow, 20_000).item()
-    Z, log_prior, log_dA = make_grid(4.0, 400, device=device)
-    lpx = log_px(x[None], Z, dec, log_prior, log_dA).item()   # batch of one image -> float
+    for step in range(steps):
+        loss = -elbo_flow_mc(x_val, dec, flow, S) #scalar, - to minimize
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        if step%10 ==0: wandb.log({"neg_elbo": loss.item()}, step=step) #log the loss every 10 steps
 
-run.summary["final_elbo"] = final_elbo #final elbo (after 3000 steps)
-run.summary["log_px"] = lpx            #log evidence log p(x) after 3000 steps
-run.summary["kl_flow"] = lpx - final_elbo #kl divergence between true evidence p(x) and flow evidence q_flow(x)
+    # final evaluation with many samples, so the reported ELBO is not noisy
+    with torch.no_grad():
+        final_elbo = elbo_flow_mc(x_val, dec, flow, 20_000).item()
+        Z, log_prior, log_dA = make_grid(4.0, 400, device=device)
+        lpx = log_px(x_val[None], Z, dec, log_prior, log_dA).item()   # batch of one image -> float
+
+    run.summary["final_elbo"] = final_elbo #final elbo (after 3000 steps)
+    run.summary["log_px"] = lpx            #log evidence log p(x) after 3000 steps
+    run.summary["kl_flow"] = lpx - final_elbo #kl divergence between true evidence p(x) and flow evidence q_flow(x)
 
 path = f"/kaggle/working/{run_name}.pt"
 torch.save(flow.state_dict(), path)
