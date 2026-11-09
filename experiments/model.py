@@ -129,10 +129,3 @@ class Flow2D(nn.Module):
     
 ## function to load vae with the weights
 
-def load_vae(artifact_dir, run_name, hidden_dims, latent_dim=2, act="tanh", input_dim=784):
-    """Rebuild encoder and decoder with the given architecture and load trained weights on CPU."""
-    enc = Encoder(input_dim, hidden_dims, latent_dim, act)
-    dec = Decoder(latent_dim, hidden_dims, input_dim, act)
-    enc.load_state_dict(torch.load(os.path.join(artifact_dir, f"{run_name}_enc_vae.pt"), map_location="cpu"))
-    dec.load_state_dict(torch.load(os.path.join(artifact_dir, f"{run_name}_dec_vae.pt"), map_location="cpu"))
-    return enc.eval(), dec.eval()

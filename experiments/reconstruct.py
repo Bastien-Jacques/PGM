@@ -2,13 +2,11 @@
 import os
 import torch
 import matplotlib.pyplot as plt
-from model import load_vae
+from utils import load_vae, load_artifact, load_dataset
 
 # settings
-run_name = "vae_ffg_h200-200_tanh_seed0"
-artifact_dir = os.path.join("artifacts", f"{run_name}-v0")
+model_name = "vae_ffg_h200-200_tanh_seed0"
 input_dim, hidden_dims, latent_dim, act = 784, [200,200], 2, "tanh"
-
 
 split = "val"                 # "train" or "val"
 idxs = list(range(10))        # images shown
@@ -17,8 +15,9 @@ seed = 0                      # for the sampled latent codes and pixels
 
 def main():
     torch.manual_seed(seed)
-    enc, dec = load_vae(artifact_dir, run_name, hidden_dims, latent_dim, act, input_dim)
-    X = torch.load("mnist_bin.pt")[split][idxs]            # (n, 784), binary images
+    enc, dec = load_vae(model_name, hidden_dims, latent_dim, act, input_dim)
+    data = load_dataset("mnist_bin")
+    X = data[split]
 
     with torch.no_grad():
         mu, logsig = enc(X)
@@ -37,7 +36,7 @@ def main():
             ax.set_xticks([]); ax.set_yticks([])
         axes[r, 0].set_ylabel(name, fontsize=8, family="serif")
     plt.subplots_adjust(wspace=0.05, hspace=0.05)
-    plt.savefig(f"recon_{run_name}_{split}.png", dpi=200, bbox_inches="tight")
+    plt.savefig(f"recon_{model_name}_{split}.png", dpi=200, bbox_inches="tight")
     plt.show()
 
 
