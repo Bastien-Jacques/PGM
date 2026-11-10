@@ -47,7 +47,7 @@ for step in range(args.steps):
     loss.backward()
     optimizer.step()
     if step % 10 == 0:
-        wandb.log({"neg_elbo_per_image": -elbo.mean().item()}, step=step)
+        wandb.log({"neg_elbo": -elbo.mean().item()}, step=step)
 
 # final evaluation: average of independent Monte Carlo estimates
 with torch.no_grad():
