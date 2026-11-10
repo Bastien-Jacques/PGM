@@ -11,7 +11,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # parameters
 p = argparse.ArgumentParser()
-p.add_argument("--idxs", type=int, nargs="+", default=[0])     # images optimized together, one (mu, logsig) each
+p.add_argument("--idx", type=int, default=0)   
 p.add_argument("--hidden_dims", type=int, nargs="+", default=[100])
 p.add_argument("--latent_dim", type=int, default=2)
 p.add_argument("--lr", type=float, default=1e-3)
