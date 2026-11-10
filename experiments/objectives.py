@@ -27,6 +27,19 @@ def elbo(x, enc, dec, family = 'ffg', reduce = True):  #Used for the taining in 
 
     return elbo.mean() if reduce else elbo #returns the average loss on a batch if redude, else the elbo per data 
 
+def elbo_ffg(X, dec, mu, logsig, S = 64):
+    #X of shape (B, 784) 
+    B = X.shape[0]
+    eps = torch.randn(S, B, 2, device = mu.device)
+    Z = mu + torch.exp(logsig)*eps #(S, B, 2)
+    Z = Z.reshape(-1, 2)
+    logits = dec(Z.reshape(-1, 2)).reshape(S, B, -1)                                 # (S, B, 784)
+    log_lik = (X * F.logsigmoid(logits) + (1 - X) * F.logsigmoid(-logits)).sum(-1)   # (S, B)
+    log_lik = log_lik.mean(0)                                                        # average over samples, (B,)
+    kl = (0.5 * (mu ** 2 + torch.exp(2 * logsig) - 1) - logsig).sum(-1)              # (B,)
+
+    return log_lik - kl
+
 
 def elbo_flow_mc(x, dec, flow, S=64, beta = 1):
     #x is a single binarized image from the dataset, shape (784,)
