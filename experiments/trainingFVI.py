@@ -25,7 +25,7 @@ args = p.parse_args()
 torch.manual_seed(args.seed)
 
 name_vae = "vae_ffg_h100_tanh_seed0"               # decoder of the Cremer et al. setting
-run_name = f"optffg_{name_vae}_{args.split}_n{len(args.idxs)}_seed{args.seed}"
+run_name = f"optffg_{name_vae}_{args.split}_{args.idx}_seed{args.seed}"
 config = vars(args) | {"model": "optimal_ffg", "vae": name_vae}
 run = wandb.init(project=args.project, name=run_name, config=config)
 
