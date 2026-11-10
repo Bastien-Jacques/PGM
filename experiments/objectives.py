@@ -40,11 +40,10 @@ def elbo_ffg(X, dec, mu, logsig, S = 64):
 
     return log_lik - kl
 
-
-def elbo_flow_mc(x, dec, flow, S=64, beta = 1):
-    #x is a single binarized image from the dataset, shape (784,)
-    z, log_q = flow.sample(S) #(S,2); (S,)
-    logits = dec(z)
-    log_lik = x @ F.logsigmoid(logits).T + (1 - x) @ F.logsigmoid(-logits).T   #(S,)  remember that sigma(-y) = 1 - sigma(y) for sigmoid function 
-    log_prior = -0.5*(z**2).sum(-1) - m.log(2*m.pi)  #(S,)
-    return (beta*log_lik + log_prior - log_q).mean()
+def elbo_ffg(x, dec, mu, logsig, S=64):
+    # x is a single binarized image, shape (784,); mu, logsig are the free variational parameters, shape (2,)
+    z = mu + torch.exp(logsig) * torch.randn(S, 2, device=mu.device)                 # (S, 2)
+    logits = dec(z)                                                                  # (S, 784)
+    log_lik = x @ F.logsigmoid(logits).T + (1 - x) @ F.logsigmoid(-logits).T         # (S,)
+    kl = (0.5 * (mu ** 2 + torch.exp(2 * logsig) - 1) - logsig).sum()                # closed-form KL to the prior
+    return log_lik.mean() - kl

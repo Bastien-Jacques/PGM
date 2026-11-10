@@ -24,6 +24,18 @@ def load_flow(run_name, version = "v0"):
     flow.load_state_dict(torch.load(os.path.join(art.download(), f"{run_name}.pt"), map_location="cpu"))
     return flow.eval()
 
+def load_optimal_ffg(idx, vae_name, split, seed=0):
+    # optimal Gaussian of one image, saved by trainingFFG.py as {"mu": ..., "logsig": ...}
+    name = f"optffg_{vae_name}_{split}{idx}_seed{seed}"
+    saved = torch.load(os.path.join(load_artifact(name), f"{name}.pt"))
+    return saved["mu"].reshape(-1), saved["logsig"].reshape(-1)     # (2,) each, whatever the saved shape
+
+
+def flow_name(idx, vae_name, split, n_layers=8, hidden=32, seed=0, annealing = False, beta0 = 0.0):
+    if not annealing:
+        return f"optflow_L{n_layers}_h{hidden}_{vae_name}_{split}{idx}_seed{seed}"
+    else: return f"optflow_L{n_layers}_h{hidden}_anneal{beta0}_{vae_name}_{split}{idx}_seed{seed}"
+
 def load_dataset(name="mnist_bin", version="v0"):
     #Download the dataset artifact and load the tensors it contains
     return torch.load(os.path.join(load_artifact(name, version), f"{name}.pt"))

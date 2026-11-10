@@ -30,46 +30,35 @@ config = vars(args) | {"model": "optimal_ffg", "vae": name_vae}
 run = wandb.init(project=args.project, name=run_name, config=config)
 
 # data and frozen decoder
-X = load_dataset("mnist_bin")[args.split][args.idx].to(device)          # (B, 784)
-B = X.shape[0]
+x = load_dataset("mnist_bin")[args.split][args.idx].to(device)        # (784,)
 _, dec = load_vae(name_vae, args.hidden_dims, args.latent_dim, "tanh", 784)
-dec = dec.to(device).requires_grad_(False)          # gradients flow through the decoder, not into it
+dec = dec.to(device).requires_grad_(False)        # gradients flow through the decoder, not into it
 
-# free variational parameters, one row per image, initialized at the prior N(0, I)
-mu = torch.zeros(B, args.latent_dim, device=device, requires_grad=True)
-logsig = torch.zeros(B, args.latent_dim, device=device, requires_grad=True)
+# free variational parameters of this image, initialized at the prior N(0, I)
+mu = torch.zeros(args.latent_dim, device=device, requires_grad=True)
+logsig = torch.zeros(args.latent_dim, device=device, requires_grad=True)
 optimizer = torch.optim.Adam([mu, logsig], lr=args.lr)
 
 for step in range(args.steps):
-    elbo = elbo_ffg(X, dec, mu, logsig, args.sample_size)                 # (B,)
-    loss = -elbo.sum()                              # images are independent: sum, so the step size does not depend on B
+    loss = -elbo_ffg(x, dec, mu, logsig, args.sample_size)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
     if step % 10 == 0:
-        wandb.log({"neg_elbo": -elbo.mean().item()}, step=step)
+        wandb.log({"neg_elbo": loss.item()}, step=step)
 
-# final evaluation: average of independent Monte Carlo estimates
 with torch.no_grad():
-    final_elbo = torch.stack([elbo_ffg(X, dec, mu, logsig, S=1000) for _ in range(20)]).mean(0)   # (B,)
+    final_elbo = torch.stack([elbo_ffg(x, dec, mu, logsig, S=1000) for _ in range(20)]).mean().item()
     Z, log_prior, log_dA = make_grid(4.0, 400, device=device)
-    lpx = log_px(X, Z, dec, log_prior, log_dA)      # exact log p(x) on the grid, (B,) 
-    kl = lpx - final_elbo                           # KL(q*_FFG || p(z|x)) per image 
+    lpx = log_px(x[None], Z, dec, log_prior, log_dA).item()
 
-run.summary["final_elbo"] = final_elbo #final elbo (after n_steps steps)
-run.summary["kl"] = lpx - final_elbo # KL(q_flow || p(z|x)) = log p(x) - ELBO
+run.summary["final_elbo"] = final_elbo
+run.summary["log_px"] = lpx
+run.summary["kl"] = lpx - final_elbo                # KL(q*_FFG || p(z|x)) = log p(x) - ELBO
 
-
-run.summary["kl_mean"] = kl.mean().item()
-for idx, k in zip(args.idxs, kl.tolist()):
-    run.summary[f"kl_{idx}"] = k
-
-# save everything needed to plot the optimal Gaussians
 path = f"/kaggle/working/{run_name}.pt"
-torch.save({"idxs": args.idxs, "mu": mu.detach().cpu(), "logsig": logsig.detach().cpu(),
-            "elbo": final_elbo.cpu(), "log_px": lpx.cpu()}, path)
-art = wandb.Artifact(name=run_name, type="ffg", metadata=config | {"kl_mean": kl.mean().item()})
+torch.save({"idx": args.idx, "mu": mu.detach().cpu(), "logsig": logsig.detach().cpu()}, path)
+art = wandb.Artifact(name=run_name, type="ffg", metadata=config | {"final_elbo": final_elbo})
 art.add_file(path)
 run.log_artifact(art)
-
 run.finish()

@@ -3,7 +3,7 @@ from model import Encoder, Decoder
 from objectives import elbo
 import wandb 
 import argparse
-
+from utils import load_dataset
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -27,7 +27,7 @@ config = vars(args) | {"model": "vae"}          # tous les arguments vont dans w
 
 torch.manual_seed(args.seed)
 
-data = torch.load("/kaggle/working/mnist_bin.pt")
+data = load_dataset("mnist_bin")
 X_train, X_val = data['train'].to(device), data['val'].to(device)
 
 
