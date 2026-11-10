@@ -30,7 +30,7 @@ config = vars(args) | {"model": "optimal_ffg", "vae": name_vae}
 run = wandb.init(project=args.project, name=run_name, config=config)
 
 # data and frozen decoder
-X = load_dataset("mnist_bin")[args.split][args.idxs].to(device)          # (B, 784)
+X = load_dataset("mnist_bin")[args.split][args.idx].to(device)          # (B, 784)
 B = X.shape[0]
 _, dec = load_vae(name_vae, args.hidden_dims, args.latent_dim, "tanh", 784)
 dec = dec.to(device).requires_grad_(False)          # gradients flow through the decoder, not into it
