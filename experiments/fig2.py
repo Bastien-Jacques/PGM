@@ -1,7 +1,7 @@
 """Figure 2 of Cremer et al. (2018): exact posterior and approximations for a 2D-latent VAE."""
 import math
 import os
-from utils import load_artifact, load_vae, load_flow, load_dataset
+from utils import load_vae, load_flow, load_dataset, flow_name, load_optimal_ffg
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -109,13 +109,11 @@ r = second_peak_ratio(X[:2000], dec)
 order = r.argsort(descending=True)
 #print([(i.item(), round(r[i].item(), 2)) for i in order[:20]])   # bimodal candidates idx
 
-def flow_name(idx, n_layers=8, hidden=32, seed=0):
-    return f"optflow_L{n_layers}_h{hidden}_{vae}_{split}{idx}_seed{seed}"
 
 
 def main(idxs: list):
 
-    row_names = ["True posterior", "Amortized FFG", "Optimal Flow"]
+    row_names = ["True posterior", "Amortized FFG", "Optimal FFG", "Optimal Flow"]
     fig, axes = plt.subplots(len(row_names), len(idxs), figsize=(3 * len(idxs), 3 * len(row_names)))
 
     with torch.no_grad():
@@ -123,25 +121,27 @@ def main(idxs: list):
         for col, idx in enumerate(idxs):
             x = X[idx]
             mu, logsig = (t[0] for t in enc(x[None]))
+            mu_opt, logsig_opt = load_optimal_ffg(idx, vae, split)
 
-            # one window per column, covering the posterior and the encoder's Gaussian
+            # one window per column, covering the posterior and both Gaussians
             post_global = posterior_on_grid(x[None], Z, dec, lp, lda)[0]
             window = union_window(window_from_posterior(post_global, Z, lda),
                                   window_from_gaussian(mu, logsig))
+            window = union_window(window, window_from_gaussian(mu_opt, logsig_opt))
             a1, b1, a2, b2 = pad_window(window)
 
-            # exact posterior and q on the local grid
+            # exact posterior and the three approximations on the local grid
             Zl, lpl, ldal, g1, g2 = make_box_grid(a1, b1, a2, b2, local_N)
             post = posterior_on_grid(x[None], Zl, dec, lpl, ldal)[0]
             q_amort = gauss_density(Zl, mu, logsig)
-            q_flow = torch.exp(load_flow(flow_name(idx)).log_prob(Zl))
+            q_ffg = gauss_density(Zl, mu_opt, logsig_opt)
+            q_flow = torch.exp(load_flow(flow_name(idx, vae, split, annealing=True)).log_prob(Zl))
 
             plot_panel(axes[0, col], g1, g2, post)
-            plot_panel(axes[1, col], g1, g2, post, q_amort)
-            plot_panel(axes[2, col], g1, g2, post, q_flow)
             axes[0, col].set_title(f"{idx}", fontsize=9)
-            axes[1, col].set_title(f"KL = {kl_on_grid(q_amort, post, ldal):.2f}", fontsize=9)
-            axes[2, col].set_title(f"KL = {kl_on_grid(q_flow, post, ldal):.2f}", fontsize=9)
+            for r, q in enumerate([q_amort, q_ffg, q_flow], start=1):
+                plot_panel(axes[r, col], g1, g2, post, q)
+                axes[r, col].set_title(f"KL = {kl_on_grid(q, post, ldal):.2f}", fontsize=9)
 
     for r, name in enumerate(row_names):
         axes[r, 0].text(-0.08, 0.5, name, transform=axes[r, 0].transAxes,
