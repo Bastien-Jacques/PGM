@@ -1,113 +1,87 @@
-import torch
-from model import Encoder, Decoder
-from objectives import elbo
-import wandb 
+"""A-VI with a frozen decoder: train a new FFG encoder on a dataset artifact (MNIST or a morphing path)."""
 import argparse
+
+import torch
+import wandb
+
+from model import Encoder
+from objectives import elbo
 from utils import load_dataset, load_vae
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-#parameters
-
+# parameters
 p = argparse.ArgumentParser()
-p.add_argument("--data", type=str, default = "mnist_bin")
-p.add_argument("--hidden_dim_enc", type=int, nargs="+", default=[100]) 
-p.add_argument("--hidden_dim_dec", type=int, nargs="+", default=[100]) 
+p.add_argument("--data", type=str, default="morph_val0_1_N1000")            # "mnist_bin" or a morphing path artifact
+p.add_argument("--hidden_dim_enc", type=int, nargs="+", default=[100])       # architecture of the new encoder
 p.add_argument("--latent_dim", type=int, default=2)
 p.add_argument("--act", type=str, default="tanh", choices=["tanh", "relu", "elu"])
 p.add_argument("--lr", type=float, default=1e-4)
 p.add_argument("--batch_size", type=int, default=50)
 p.add_argument("--epochs", type=int, default=300)
 p.add_argument("--seed", type=int, default=0)
-p.add_argument("--family", type = str, default = "ffg")
+p.add_argument("--family", type=str, default="ffg")
 p.add_argument("--project", type=str, default="PGM")
 args = p.parse_args()
 
-
-name_vae = "vae_ffg_h100_tanh_seed0" #run with the Cremer et al decoder
-
-run_name = f"enc_{args.data}_{args.family}_h{'-'.join(map(str, args.hidden_dim_enc))}_{args.act}_dec-{name_vae}_seed{args.seed}"
-config = vars(args) | {"model": "vae"}          # tous les arguments vont dans wandb
-
+name_vae = "vae_ffg_h100_tanh_seed0"               # reference VAE: only its decoder is used, and it stays frozen
+run_name = (f"enc_{args.data}_{args.family}_h{'-'.join(map(str, args.hidden_dim_enc))}_{args.act}"
+            f"_dec-{name_vae}_seed{args.seed}")
+config = vars(args) | {"model": "avi_frozen_decoder", "vae": name_vae}
 
 torch.manual_seed(args.seed)
+run = wandb.init(project=args.project, name=run_name, config=config)
 
+# data: MNIST has a validation set, a morphing path does not (we want the best fit on these very images)
 data = load_dataset(args.data)
 if args.data == "mnist_bin":
     X, X_val = data["train"].to(device), data["val"].to(device)
 elif args.data.startswith("morph"):
     X, X_val = data["X"].to(device), None
-N = X.shape[0]
-
-B = args.batch_size  #batch size (Cremer et al = 50)
-
-input_dim = X.shape[1]
-hidden_dim_enc = args.hidden_dim_enc
-hidden_dim_dec = args.hidden_dim_dec
-latent_dim = args.latent_dim
-output_dim = input_dim
-
-act = args.act
-lr = args.lr
-
-enc = Encoder(input_dim, hidden_dim_enc, latent_dim, act).to(device)
-_, dec = load_vae(name_vae,hidden_dim_enc = hidden_dim_enc, hidden_dim_dec = hidden_dim_dec, latent_dim=2, act="tanh", input_dim=784)
-dec = dec.to(device).requires_grad_(False) #gradient not needed since the decoder is already trained: frozen decoder
-
-if args.data == "mnist_bin":
-    optimizer = torch.optim.Adam(list(enc.parameters()) + list(dec.parameters()), lr = args.lr)
 else:
-    optimizer = torch.optim.Adam(list(enc.parameters()), lr = args.lr) #for the encoder training only 
+    raise ValueError(f"unknown dataset {args.data}")
+N, input_dim = X.shape
 
+# new encoder, frozen decoder of the reference VAE
+enc = Encoder(input_dim, args.hidden_dim_enc, args.latent_dim, args.act).to(device)
+_, dec = load_vae(name_vae, hidden_dim_enc=[100], hidden_dim_dec=[100],
+                  latent_dim=args.latent_dim, act="tanh", input_dim=input_dim)
+dec = dec.to(device).requires_grad_(False)        # gradients flow through the decoder, not into it
+optimizer = torch.optim.Adam(enc.parameters(), lr=args.lr)
 
-epochs = args.epochs
+enc_path = f"/kaggle/working/{run_name}_enc.pt"
+best_val = float("inf")
 
-family = args.family
-
-run = wandb.init(project=args.project, config=config, name=run_name)
-
-best_val = float("inf")  
-for epoch in range(epochs):
-
-    train_loss_tot, val_loss_tot = 0, 0
-    perm = torch.randperm(N, device = device) #suffle the training data order at each epoch
-    
-    #training loop
-    for i in range(0, N, B): #separation with batches
-        x_batch = X[perm[i:i+B]]
-        train_loss = - elbo(x_batch, enc, dec) #mean on the batch
-        train_loss_tot += train_loss.item()*x_batch.shape[0] #sum of the train loss on the batch
+for epoch in range(args.epochs):
+    # one pass over the data in a random order
+    train_loss_tot = 0.0
+    perm = torch.randperm(N, device=device)
+    for i in range(0, N, args.batch_size):
+        x_batch = X[perm[i:i + args.batch_size]]
+        loss = -elbo(x_batch, enc, dec)            # mean negative ELBO over the batch
         optimizer.zero_grad()
-        train_loss.backward()
+        loss.backward()
         optimizer.step()
+        train_loss_tot += loss.item() * x_batch.shape[0]
+    log = {"epoch": epoch, "train_loss": train_loss_tot / N}
 
-    #validation loop
-    if args.data == 'mnist_bin':
+    # MNIST: keep the encoder with the best validation loss
+    if X_val is not None:
         with torch.no_grad():
-            val_loss_tot = - elbo(X_val, enc, dec).item() #average validation loss on the whole validation set
-        
-        if val_loss_tot < best_val:
-            best_val = val_loss_tot
-            torch.save(enc.state_dict(), f"/kaggle/working/{run_name}_enc_vae.pt")
-            torch.save(dec.state_dict(), f"/kaggle/working/{run_name}_dec_vae.pt")
+            val_loss = -elbo(X_val, enc, dec).item()
+        log["val_loss"] = val_loss
+        if val_loss < best_val:
+            best_val = val_loss
+            torch.save(enc.state_dict(), enc_path)
 
-        wandb.log({"epoch": epoch, "train_loss": train_loss_tot/N, "val_loss": val_loss_tot})
-    wandb.log({"epoch": epoch, "loss": train_loss_tot/N}) #wandb log in the case of morphing dataset
- 
-final_loss = train_loss_tot / N
-meta = config | ({"best_validation": best_val} if X_val is not None else {"final_train_loss": final_loss})
-art = wandb.Artifact(name=run_name, type="model", metadata=meta)
-art.add_file(f"/kaggle/working/{run_name}_enc_vae.pt")
-art.add_file(f"/kaggle/working/{run_name}_dec_vae.pt")
+    wandb.log(log)
+
+# morphing path: no validation, the final encoder is the fit we want
+if X_val is None:
+    torch.save(enc.state_dict(), enc_path)
+
+meta = config | ({"best_validation": best_val} if X_val is not None else {"final_train_loss": train_loss_tot / N})
+art = wandb.Artifact(name=run_name, type="encoder", metadata=meta)
+art.add_file(enc_path)
 run.log_artifact(art)
-
-#save best weights of the model on wandB directly
-
-run.finish() # wandb end
-
-
-
-
-
-
-
+run.finish()
