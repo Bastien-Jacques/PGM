@@ -6,7 +6,7 @@ import wandb
 
 from model import Encoder
 from objectives import elbo
-from utils import load_dataset, load_vae
+from utils import load_dataset, load_vae, load_encoder
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -19,14 +19,14 @@ p.add_argument("--act", type=str, default="tanh", choices=["tanh", "relu", "elu"
 p.add_argument("--lr", type=float, default=1e-4)
 p.add_argument("--batch_size", type=int, default=50)
 p.add_argument("--epochs", type=int, default=300)
-p.add_argument("--init_from_vae", action="store_true")                       # start from the reference VAE encoder instead of a random one
+p.add_argument("--init_from_enc", type=str, default=None)        # name of a saved encoder run to start from (same architecture
 p.add_argument("--seed", type=int, default=0)
 p.add_argument("--family", type=str, default="ffg")
 p.add_argument("--project", type=str, default="PGM")
 args = p.parse_args()
 
 name_vae = "vae_ffg_h100_tanh_seed0"               # reference VAE: only its decoder is used, and it stays frozen
-init_tag = "_initvae" if args.init_from_vae else ""
+init_tag = "_ft" if args.init_from_enc is not None else ""          # fine-tuned from a pre-trained encoder
 run_name = (f"enc_{args.data}_{args.family}_h{'-'.join(map(str, args.hidden_dim_enc))}_{args.act}"
             f"{init_tag}_dec-{name_vae}_seed{args.seed}")
 config = vars(args) | {"model": "avi_frozen_decoder", "vae": name_vae}
@@ -46,11 +46,10 @@ N, input_dim = X.shape
 
 # new encoder, frozen decoder of the reference VAE
 enc = Encoder(input_dim, args.hidden_dim_enc, args.latent_dim, args.act).to(device)
-if args.init_from_vae:
-    # the VAE encoder already sends both endpoints to the right basins; same architecture required
-    enc_vae, _ = load_vae(name_vae, hidden_dim_enc=[100], hidden_dim_dec=[100],
-                          latent_dim=args.latent_dim, act="tanh", input_dim=input_dim)
-    enc.load_state_dict(enc_vae.state_dict())
+if args.init_from_enc is not None:
+    # start from an encoder pre-trained on MNIST with the same frozen decoder
+    enc.load_state_dict(load_encoder(args.init_from_enc, args.hidden_dim_enc, latent_dim=args.latent_dim, act=args.act).state_dict())
+
 
 _, dec = load_vae(name_vae, hidden_dim_enc=[100], hidden_dim_dec=[100],
                   latent_dim=args.latent_dim, act="tanh", input_dim=input_dim)

@@ -7,6 +7,12 @@ def load_artifact(name, version='v0'):
     api = wandb.Api()
     return api.artifact(f"bastienjacques38-university-/PGM/{name}:{version}").download()
 
+def load_encoder(run_name, hidden_dim_enc, latent_dim=2, act="tanh", input_dim=784, version="latest"):
+    """Rebuild an encoder trained on its own, with a frozen decoder, and load its weights on CPU."""
+    enc = Encoder(input_dim, hidden_dim_enc, latent_dim, act)
+    enc.load_state_dict(torch.load(os.path.join(load_artifact(run_name, version), f"{run_name}_enc.pt"), map_location="cpu"))
+    return enc.eval()
+
 def load_vae(run_name, hidden_dim_enc, hidden_dim_dec, latent_dim=2, act="tanh", input_dim=784, version ='v0'):
     #Rebuild encoder and decoder with the given architecture and load trained weights on CPU
 
