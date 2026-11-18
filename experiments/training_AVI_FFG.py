@@ -26,7 +26,7 @@ args = p.parse_args()
 
 name_vae = "vae_ffg_h100_tanh_seed0" #run with the Cremer et al decoder
 
-run_name = f"enc_{args.data}_{args.family}_h{'-'.join(map(str, args.enc_hidden_dims))}_{args.act}_dec-{name_vae}_seed{args.seed}"
+run_name = f"enc_{args.data}_{args.family}_h{'-'.join(map(str, args.hidden_dim_enc))}_{args.act}_dec-{name_vae}_seed{args.seed}"
 config = vars(args) | {"model": "vae"}          # tous les arguments vont dans wandb
 
 
