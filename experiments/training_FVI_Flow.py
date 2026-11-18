@@ -15,7 +15,8 @@ p = argparse.ArgumentParser()
 
 p.add_argument("--hidden_dim_flow", type=int, default=32)  
 p.add_argument("--n_layers", type=int, default=8) 
-p.add_argument("--hidden_dims", type=int, nargs="+", default=[100])  
+p.add_argument("--hidden_dim_enc", type=int, nargs="+", default=[100])  
+p.add_argument("--hidden_dim_dec", type=int, nargs="+", default=[100])  
 p.add_argument("--latent_dim", type=int, default=2)
 p.add_argument("--lr", type=float, default=1e-3)
 p.add_argument("--sample_size", type=int, default=50)
@@ -46,7 +47,8 @@ S = args.sample_size  #sample size
 
 hidden_dim_flow = args.hidden_dim_flow
 n_layers = args.n_layers
-hidden_dims = args.hidden_dims
+hidden_dim_enc = args.hidden_dim_enc
+hidden_dim_dec = args.hidden_dim_dec
 lr = args.lr
 steps = args.steps
 
@@ -55,7 +57,7 @@ steps = args.steps
 flow = Flow2D(n_layers = n_layers, hidden = hidden_dim_flow).to(device)
 optimizer = torch.optim.Adam(list(flow.parameters()), lr = lr) ## Important, we only train flow network, not decoder which is already trained
 
-_, dec = load_vae(name_vae, hidden_dims, latent_dim=2, act="tanh", input_dim=784)
+_, dec = load_vae(name_vae, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_dec, latent_dim=2, act="tanh", input_dim=784)
 dec = dec.to(device).requires_grad_(False) #gradient not needed since the decoder is already trained: frozen decoder
 
 x = X[args.idx]

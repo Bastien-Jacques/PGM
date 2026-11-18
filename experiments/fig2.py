@@ -83,11 +83,11 @@ def plot_panel(ax, g1, g2, post, q=None):
 
 # settings #
 
-input_dim, hidden_dims, latent_dim, act = 784, [100], 2, "tanh"
+input_dim, hidden_dim_enc, hidden_dim_dec, latent_dim, act = 784, [100], [100], 2, "tanh"
 split = "val"      
 
 vae = "vae_ffg_h100_tanh_seed0"
-enc, dec = load_vae(vae, hidden_dims, latent_dim, act, input_dim)
+enc, dec = load_vae(vae, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_enc, latent_dim=latent_dim, act=act, input_dim=input_dim)
 data = load_dataset("mnist_bin")
 X = data[split]
 

@@ -5,7 +5,7 @@ from utils import load_vae, load_dataset, flow_name, load_flow
 
 # settings
 vae_name = "vae_ffg_h100_tanh_seed0"
-input_dim, hidden_dims, latent_dim, act = 784, [100], 2, "tanh"
+input_dim, hidden_dim_enc, hidden_dim_dec, latent_dim, act = 784, [100], [100], 2, "tanh"
 split = "val"                 # "train" or "val"
 idxs = range(0,30)           # images shown, one column each
 seed = 0                      # for the sampled latent codes and pixels
@@ -27,7 +27,7 @@ def plot_rows(rows, fname=None):
 
 def main(family):
     torch.manual_seed(seed)
-    enc, dec = load_vae(vae_name, hidden_dims, latent_dim, act, input_dim)
+    enc, dec = load_vae(vae_name, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_dec, latent_dim=latent_dim, act=act, input_dim=input_dim)
     X = load_dataset("mnist_bin")[split][idxs]        # (len(idxs), 784), in the order of idxs
 
     with torch.no_grad():

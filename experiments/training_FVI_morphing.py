@@ -17,7 +17,8 @@ p.add_argument("--family", type=str, default="ffg", choices=["ffg", "flow"])
 p.add_argument("--data", type=str, default="morph_val0_1_N1000")   # dataset artifact holding {"X", "alpha", ...}
 p.add_argument('--n_restarts', type = int, default = 10)
 p.add_argument("--init", type=str, default="prior")                # "prior", or the name of an optimal FFG / flow run to start from
-p.add_argument("--hidden_dims", type=int, nargs="+", default=[100])
+p.add_argument("--hidden_dim_enc", type=int, nargs="+", default=[100])
+p.add_argument("--hidden_dim_dec", type=int, nargs="+", default=[100])
 p.add_argument("--latent_dim", type=int, default=2)
 p.add_argument("--lr_max", type=float, default=None)               # default: 1e-2 for ffg, 1e-3 for flow
 p.add_argument("--lr_min", type=float, default=None)               # default: 1e-2 for ffg, 1e-3 for flow
@@ -44,7 +45,12 @@ run = wandb.init(project=args.project, name=run_name, config=config)
 data = load_dataset(args.data)
 X = data["X"].to(device)                                               # (B, 784)
 B = X.shape[0]
-_, dec = load_vae(name_vae, args.hidden_dims, args.latent_dim, "tanh", 784)
+
+hidden_dim_enc = args.hidden_dim_enc
+hidden_dim_dec = args.hidden_dim_dec
+latent_dim = args.latent_dim
+
+_, dec = load_vae(name_vae, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_dec,latent_dim=latent_dim, act="tanh",input_dim=784)
 dec = dec.to(device).requires_grad_(False)
 
 

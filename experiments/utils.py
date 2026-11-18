@@ -7,12 +7,12 @@ def load_artifact(name, version='v0'):
     api = wandb.Api()
     return api.artifact(f"bastienjacques38-university-/PGM/{name}:{version}").download()
 
-def load_vae(run_name, hidden_dims, latent_dim=2, act="tanh", input_dim=784, version ='v0'):
+def load_vae(run_name, hidden_dim_enc, hidden_dim_dec, latent_dim=2, act="tanh", input_dim=784, version ='v0'):
     #Rebuild encoder and decoder with the given architecture and load trained weights on CPU
 
     artifact_dir = load_artifact(run_name, version)
-    enc = Encoder(input_dim, hidden_dims, latent_dim, act)
-    dec = Decoder(latent_dim, hidden_dims, input_dim, act)
+    enc = Encoder(input_dim, hidden_dim_enc, latent_dim, act)
+    dec = Decoder(latent_dim, hidden_dim_dec, input_dim, act)
     enc.load_state_dict(torch.load(os.path.join(artifact_dir, f"{run_name}_enc_vae.pt"), map_location="cpu"))
     dec.load_state_dict(torch.load(os.path.join(artifact_dir, f"{run_name}_dec_vae.pt"), map_location="cpu"))
     return enc.eval(), dec.eval()
@@ -27,7 +27,7 @@ def load_flow(run_name, version = "v0"):
 def load_optimal_ffg(idx, vae_name, split, seed=0):
     # optimal Gaussian of one image, saved by trainingFFG.py as {"mu": ..., "logsig": ...}
     name = f"optffg_{vae_name}_{split}{idx}_seed{seed}"
-    saved = torch.load(os.path.join(load_artifact(name), f"{name}.pt"))
+    saved = torch.load(os.path.join(load_artifact(name, "latest"), f"{name}.pt"))
     return saved["mu"].reshape(-1), saved["logsig"].reshape(-1)     # (2,) each, whatever the saved shape
 
 

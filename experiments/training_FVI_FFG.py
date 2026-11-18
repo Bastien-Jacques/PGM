@@ -13,7 +13,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 p = argparse.ArgumentParser()
 
 p.add_argument("--idx", type=int, default=0)   
-p.add_argument("--hidden_dims", type=int, nargs="+", default=[100])
+p.add_argument("--hidden_dim_enc", type=int, nargs="+", default=[100])
+p.add_argument("--hidden_dim_dec", type=int, nargs="+", default=[100])
 p.add_argument("--latent_dim", type=int, default=2)
 p.add_argument("--lr", type=float, default=1e-3)
 p.add_argument("--steps", type=int, default=3000)
@@ -33,7 +34,7 @@ run = wandb.init(project=args.project, name=run_name, config=config)
 # data and frozen decoder
 
 x = load_dataset("mnist_bin")[args.split][args.idx].to(device)        # (784,)
-_, dec = load_vae(name_vae, args.hidden_dims, args.latent_dim, "tanh", 784)
+_, dec = load_vae(name_vae, hidden_dim_enc=args.hidden_dim_enc, hidden_dim_dec=args.hidden_dim_dec, latent_dim=args.latent_dim, act="tanh",input_dim=784)
 dec = dec.to(device).requires_grad_(False)        # gradients flow through the decoder, not into it
 
 # free variational parameters of this image, initialized at the prior N(0, I)
