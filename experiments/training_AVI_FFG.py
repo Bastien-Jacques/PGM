@@ -94,8 +94,9 @@ for epoch in range(epochs):
         wandb.log({"epoch": epoch, "train_loss": train_loss_tot/N, "val_loss": val_loss_tot})
     wandb.log({"epoch": epoch, "loss": train_loss_tot/N}) #wandb log in the case of morphing dataset
  
-art = wandb.Artifact(name=run_name, type="model",
-                     metadata={"best_validation": best_val})
+final_loss = train_loss_tot / N
+meta = config | ({"best_validation": best_val} if X_val is not None else {"final_train_loss": final_loss})
+art = wandb.Artifact(name=run_name, type="model", metadata=meta)
 art.add_file(f"/kaggle/working/{run_name}_enc_vae.pt")
 art.add_file(f"/kaggle/working/{run_name}_dec_vae.pt")
 run.log_artifact(art)
