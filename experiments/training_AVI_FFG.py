@@ -12,21 +12,23 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # parameters
 p = argparse.ArgumentParser()
-p.add_argument("--data", type=str, default="morph_val0_1_N1000")            # "mnist_bin" or a morphing path artifact
+p.add_argument("--data", type=str, default="morph_val0_1_N1000")             # "mnist_bin" or a morphing path artifact
 p.add_argument("--hidden_dim_enc", type=int, nargs="+", default=[100])       # architecture of the new encoder
 p.add_argument("--latent_dim", type=int, default=2)
 p.add_argument("--act", type=str, default="tanh", choices=["tanh", "relu", "elu"])
 p.add_argument("--lr", type=float, default=1e-4)
 p.add_argument("--batch_size", type=int, default=50)
 p.add_argument("--epochs", type=int, default=300)
+p.add_argument("--init_from_vae", action="store_true")                       # start from the reference VAE encoder instead of a random one
 p.add_argument("--seed", type=int, default=0)
 p.add_argument("--family", type=str, default="ffg")
 p.add_argument("--project", type=str, default="PGM")
 args = p.parse_args()
 
 name_vae = "vae_ffg_h100_tanh_seed0"               # reference VAE: only its decoder is used, and it stays frozen
+init_tag = "_initvae" if args.init_from_vae else ""
 run_name = (f"enc_{args.data}_{args.family}_h{'-'.join(map(str, args.hidden_dim_enc))}_{args.act}"
-            f"_dec-{name_vae}_seed{args.seed}")
+            f"{init_tag}_dec-{name_vae}_seed{args.seed}")
 config = vars(args) | {"model": "avi_frozen_decoder", "vae": name_vae}
 
 torch.manual_seed(args.seed)
@@ -44,6 +46,12 @@ N, input_dim = X.shape
 
 # new encoder, frozen decoder of the reference VAE
 enc = Encoder(input_dim, args.hidden_dim_enc, args.latent_dim, args.act).to(device)
+if args.init_from_vae:
+    # the VAE encoder already sends both endpoints to the right basins; same architecture required
+    enc_vae, _ = load_vae(name_vae, hidden_dim_enc=[100], hidden_dim_dec=[100],
+                          latent_dim=args.latent_dim, act="tanh", input_dim=input_dim)
+    enc.load_state_dict(enc_vae.state_dict())
+
 _, dec = load_vae(name_vae, hidden_dim_enc=[100], hidden_dim_dec=[100],
                   latent_dim=args.latent_dim, act="tanh", input_dim=input_dim)
 dec = dec.to(device).requires_grad_(False)        # gradients flow through the decoder, not into it
