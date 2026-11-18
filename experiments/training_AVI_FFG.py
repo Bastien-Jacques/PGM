@@ -50,7 +50,8 @@ output_dim = input_dim
 act = args.act
 lr = args.lr
 
-enc, dec = load_vae(name_vae,hidden_dim_enc = hidden_dim_enc, hidden_dim_dec = hidden_dim_dec, latent_dim=2, act="tanh", input_dim=784)
+enc = Encoder(input_dim, hidden_dim_enc, latent_dim, act).to(device)
+_, dec = load_vae(name_vae,hidden_dim_enc = hidden_dim_enc, hidden_dim_dec = hidden_dim_dec, latent_dim=2, act="tanh", input_dim=784)
 dec = dec.to(device).requires_grad_(False) #gradient not needed since the decoder is already trained: frozen decoder
 
 if args.data == "mnist_bin":
