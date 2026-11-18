@@ -7,11 +7,12 @@ import torch
 from matplotlib.patches import Ellipse
 
 from grid import make_grid, posterior_on_grid
-from utils import load_artifact, load_dataset, load_vae
+from utils import load_artifact, load_dataset, load_vae, load_encoder
 from objectives import elbo_ffg_batch
 
 # settings
 vae = "vae_ffg_h100_tanh_seed0"
+enc_run = "enc_morph_val0_1_N1000_ffg_h100_tanh_initvae_dec-vae_ffg_h100_tanh_seed0_seed0"   # encoder trained on the path, frozen decoder
 input_dim, hidden_dim_enc, hidden_dim_dec, latent_dim, act = 784, [100], [100], 2, "tanh"
 data_name = "morph_val0_1_N1000"
 ffg_runs = [f"optffg_{data_name}_initprior_K20_seed0:v1"]      # best of K random random restarts from the prior for every omage of the morphing
@@ -41,7 +42,9 @@ def draw_posterior(ax, g, dens):
 def main():
     path = load_dataset(data_name)
     alpha, X = path["alpha"], path["X"]
-    enc, dec = load_vae(vae, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_dec, latent_dim=latent_dim, act=act, input_dim=input_dim)
+    _, dec = load_vae(vae, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_dec,
+                      latent_dim=latent_dim, act=act, input_dim=input_dim)
+    enc = load_encoder(enc_run, hidden_dim_enc=hidden_dim_enc)
 
     # optimal FFG: for each alpha, keep the branch with the larger ELBO
     runs = [load_run(r) for r in ffg_runs]
@@ -53,6 +56,8 @@ def main():
     # amortized FFG on the same path
     with torch.no_grad():
         mu_a, logsig_a = enc(X)
+        print("encoder mu at alpha = 0, 0.5, 1:", mu_a[0].tolist(), mu_a[len(mu_a) // 2].tolist(), mu_a[-1].tolist())
+        print("optimal mu at alpha = 0, 1:     ", mu_s[0].tolist(), mu_s[-1].tolist())
         elbo_a = torch.stack([elbo_ffg_batch(X, dec, mu_a, logsig_a, S=100) for _ in range(20)]).mean(0)   # (N + 1,)  ELBO of the encoder's Gaussian on every image, 
                                                                                                            # averaged over independent estimates
     elbo_s = elbos.max(0).values                                       # ELBO of the selected optimal FFG
