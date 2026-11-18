@@ -19,7 +19,8 @@ p.add_argument('--n_restarts', type = int, default = 10)
 p.add_argument("--init", type=str, default="prior")                # "prior", or the name of an optimal FFG / flow run to start from
 p.add_argument("--hidden_dims", type=int, nargs="+", default=[100])
 p.add_argument("--latent_dim", type=int, default=2)
-p.add_argument("--lr", type=float, default=None)                   # default: 1e-2 for ffg, 1e-3 for flow
+p.add_argument("--lr_max", type=float, default=None)               # default: 1e-2 for ffg, 1e-3 for flow
+p.add_argument("--lr_min", type=float, default=None)               # default: 1e-2 for ffg, 1e-3 for flow
 p.add_argument("--steps", type=int, default=None)                  # default: 3000 for ffg, 1500 for flow
 p.add_argument("--sample_size", type=int, default=64)
 p.add_argument("--n_layers", type=int, default=8)                  # flow only, used when starting from the prior
@@ -28,15 +29,15 @@ p.add_argument("--seed", type=int, default=0)
 p.add_argument("--project", type=str, default="PGM")
 args = p.parse_args()
 
-lr = args.lr if args.lr is not None else {"ffg": 1e-2, "flow": 1e-3}[args.family]
-lr_min = lr/100
+lr_max = args.lr_max if args.lr_max is not None else {"ffg": 1e-2, "flow": 1e-3}[args.family]
+lr_min = args.lr_min
 steps = args.steps if args.steps is not None else {"ffg": 3000, "flow": 1500}[args.family]
 torch.manual_seed(args.seed)
 
 name_vae = "vae_ffg_h100_tanh_seed0"
 init_tag = "prior" if args.init == "prior" else args.init.split("_")[-2]     # e.g. "val0" for ..._val0_seed0
 run_name = f"opt{args.family}_{args.data}_init{init_tag}_K{args.n_restarts}_seed{args.seed}"
-config = vars(args) | {"lr": lr, "steps": steps, "K": args.n_restarts, "model": f"optimal_{args.family}", "vae": name_vae}
+config = vars(args) | {"lr_max": lr_max, "lr_min": lr_min, "steps": steps, "K": args.n_restarts, "model": f"optimal_{args.family}", "vae": name_vae}
 run = wandb.init(project=args.project, name=run_name, config=config)
 
 # images of the path and frozen decoder
@@ -56,7 +57,7 @@ def fit_ffg():
     mu = torch.randn(K * B, args.latent_dim, device=device).requires_grad_(True)   # random starts drawn from the prior
     logsig = torch.zeros(K * B, args.latent_dim, device=device, requires_grad=True)
 
-    opt = torch.optim.Adam([mu, logsig], lr=lr)
+    opt = torch.optim.Adam([mu, logsig], lr=lr_max)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max = steps, eta_min = lr_min)
 
     for step in range(steps):
@@ -91,7 +92,7 @@ def fit_flow():
     states, final_elbo = [], []
     for i in range(B):
         flow = copy.deepcopy(flow0)                                   # same starting point for every image
-        opt = torch.optim.Adam(flow.parameters(), lr=lr)
+        opt = torch.optim.Adam(flow.parameters(), lr=lr_max)
         for step in range(steps):
             loss = -elbo_flow_mc(X[i], dec, flow, args.sample_size)
             opt.zero_grad()
