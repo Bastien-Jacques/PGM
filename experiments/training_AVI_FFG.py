@@ -61,9 +61,11 @@ enc_path = f"/kaggle/working/{run_name}_enc.pt"
 best_val = float("inf")
 
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', factor=0.1, patience = 50)
+best_train_loss = torch.inf
 
 for epoch in range(args.epochs):
     # one pass over the data in a random order
+
     train_loss_tot = 0.0
     perm = torch.randperm(N, device=device)
     for i in range(0, N, args.batch_size):
@@ -78,6 +80,11 @@ for epoch in range(args.epochs):
     log = {"epoch": epoch, "train_loss": train_loss_tot / N, 'lr':  lr_now}
 
     # MNIST: keep the encoder with the best validation loss
+
+    if X_val is None and train_loss_tot < best_train_loss:
+        best_train_loss = train_loss_tot
+        torch.save(enc.state_dict(), enc_path)
+
     if X_val is not None:
         with torch.no_grad():
             val_loss = -elbo(X_val, enc, dec).item()
@@ -92,7 +99,7 @@ for epoch in range(args.epochs):
 if X_val is None:
     torch.save(enc.state_dict(), enc_path)
 
-meta = config | ({"best_validation": best_val} if X_val is not None else {"final_train_loss": train_loss_tot / N})
+meta = config | ({"best_validation": best_val} if X_val is not None else {"best_train_loss": best_train_loss / N})
 art = wandb.Artifact(name=run_name, type="encoder", metadata=meta)
 art.add_file(enc_path)
 run.log_artifact(art)
