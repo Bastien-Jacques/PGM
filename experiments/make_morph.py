@@ -34,3 +34,4 @@ art = wandb.Artifact(name, type="dataset", metadata=vars(args))
 art.add_file(path)
 run.log_artifact(art)
 run.finish()
+

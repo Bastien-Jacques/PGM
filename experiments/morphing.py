@@ -143,7 +143,7 @@ def save_posteriors_svg(dec, X_path, alpha, alphas, window, n_box=300, folder="p
         post = posterior_on_grid(X_path[idx], Z, dec, lp, lda)
 
     for k, p in zip(idx, post):
-        fig, ax = plt.subplots(figsize=(1.2, 1.2 * (b2 - a2) / (b1 - a1)))       # same aspect ratio as the window
+        fig, ax = plt.subplots(figsize=(1.2, 1.2 * (b2 - a2) / (b1 - a1)))        # same aspect ratio as the window
         D = p.view(n_box, n_box).T.numpy()                                        # contourf expects (y, x) indexing
         ax.contourf(g1.numpy(), g2.numpy(), D, levels=D.max() * np.array([0.05, 0.25, 0.5, 0.75, 1.0]),
                     cmap="Greens")

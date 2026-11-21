@@ -2,6 +2,7 @@
 import argparse
 
 import torch
+import torch.nn as nn
 import wandb
 
 from model import Encoder
@@ -59,6 +60,8 @@ optimizer = torch.optim.Adam(enc.parameters(), lr=args.lr)
 enc_path = f"/kaggle/working/{run_name}_enc.pt"
 best_val = float("inf")
 
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', factor=0.1, patience = 50)
+
 for epoch in range(args.epochs):
     # one pass over the data in a random order
     train_loss_tot = 0.0
@@ -70,6 +73,7 @@ for epoch in range(args.epochs):
         loss.backward()
         optimizer.step()
         train_loss_tot += loss.item() * x_batch.shape[0]
+    scheduler.step()    
     log = {"epoch": epoch, "train_loss": train_loss_tot / N}
 
     # MNIST: keep the encoder with the best validation loss
