@@ -74,7 +74,8 @@ for epoch in range(args.epochs):
         optimizer.step()
         train_loss_tot += loss.item() * x_batch.shape[0]
     scheduler.step(train_loss_tot)    
-    log = {"epoch": epoch, "train_loss": train_loss_tot / N}
+    lr_now = optimizer.param_groups[0]["lr"]
+    log = {"epoch": epoch, "train_loss": train_loss_tot / N, 'lr':  lr_now}
 
     # MNIST: keep the encoder with the best validation loss
     if X_val is not None:
