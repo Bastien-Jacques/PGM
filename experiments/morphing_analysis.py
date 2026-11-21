@@ -12,8 +12,10 @@ from objectives import elbo_ffg_batch
 
 # settings
 vae = "vae_ffg_h100_tanh_seed0"
-enc_run = "enc_morph_val0_1_N1000_ffg_h100_tanh_initvae_dec-vae_ffg_h100_tanh_seed0_seed0"   # encoder trained on the path, frozen decoder
-input_dim, hidden_dim_enc, hidden_dim_dec, latent_dim, act = 784, [100], [100], 2, "tanh"
+enc_run = "enc_morph_val0_1_N1000_ffg_h100-100-100_tanh_ft_dec-vae_ffg_h100_tanh_seed0_seed0"   # encoder trained on the path, frozen decoder
+input_dim, latent_dim, act = 784, 2, "tanh"
+vae_hidden = [100]                   # architecture of the reference VAE (its encoder is not used, its decoder is)
+enc_hidden = [100, 100, 100]              # architecture of the encoder trained on the path
 data_name = "morph_val0_1_N1000"
 ffg_runs = [f"optffg_{data_name}_initprior_K20_seed0:v1"]      # best of K random random restarts from the prior for every omage of the morphing
                                                        # every image started from the optimum of x_N
@@ -42,9 +44,9 @@ def draw_posterior(ax, g, dens):
 def main():
     path = load_dataset(data_name)
     alpha, X = path["alpha"], path["X"]
-    _, dec = load_vae(vae, hidden_dim_enc=hidden_dim_enc, hidden_dim_dec=hidden_dim_dec,
+    _, dec = load_vae(vae, hidden_dim_enc=vae_hidden, hidden_dim_dec=vae_hidden,
                       latent_dim=latent_dim, act=act, input_dim=input_dim)
-    enc = load_encoder(enc_run, hidden_dim_enc=hidden_dim_enc)
+    enc = load_encoder(enc_run, hidden_dim_enc=enc_hidden)
 
     # optimal FFG: for each alpha, keep the branch with the larger ELBO
     runs = [load_run(r) for r in ffg_runs]
@@ -96,7 +98,6 @@ def main():
     plt.savefig(f"morph_latent_{data_name}.png", dpi=200, bbox_inches="tight")
     plt.show()
 
-    # ELBO of the two branches and W2 between neighbours
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(8, 7), sharex=True)
     
     ax1.plot(alpha, gap, color="tab:purple")
