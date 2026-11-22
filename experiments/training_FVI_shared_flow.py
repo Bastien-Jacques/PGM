@@ -12,8 +12,8 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 p = argparse.ArgumentParser()
 p.add_argument("--data", type=str, default="morph_val0_1_N1000")
-p.add_argument("--n_layers", type=int, default=8)
-p.add_argument("--hidden_dim_flow", type=int, default=32)
+p.add_argument("--n_layers", type=int, default=8)              # amount of layers for the flow 
+p.add_argument("--hidden_dim_flow", type=int, default=32)      #hidden dimension of the flow
 p.add_argument("--steps_T", type=int, default=5000)            # step A: learning the shared flow 
                                                                #(learns the parameters of the flow with the parameters nu at the same time)
 
