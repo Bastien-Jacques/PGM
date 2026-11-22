@@ -51,3 +51,19 @@ def elbo_flow_mc(x, dec, flow, S=64, beta = 1):
     log_lik = x @ F.logsigmoid(logits).T + (1 - x) @ F.logsigmoid(-logits).T   #(S,)  remember that sigma(-y) = 1 - sigma(y) for sigmoid function 
     log_prior = -0.5*(z**2).sum(-1) - m.log(2*m.pi)  #(S,)
     return (beta*log_lik + log_prior - log_q).mean()
+
+def elbo_shared_flow(X, dec, layers, mu, logsig, S=32, beta=1.0):
+    # q_n = T # N(mu_n, sigma_n^2), with T the composition of the shared coupling layers (basically as push forward)
+    # X: (R, 784) images; mu, logsig: (R, 2) base parameters, one row per image
+    eps = torch.randn(S, *mu.shape, device=mu.device)                                  # (S, R, 2)
+    z = (mu + torch.exp(logsig) * eps).reshape(-1, 2)                                  # base samples, (S * R, 2)
+    log_q = (-0.5 * eps ** 2 - logsig - 0.5 * m.log(2 * m.pi)).sum(-1)                 # base log-density, (S, R)
+    for layer in layers:                                                               # push the samples through T
+        z, log_det = layer(z)
+        log_q = log_q - log_det.view(S, -1)
+    z = z.view(S, -1, 2)
+    logits = dec(z.reshape(-1, 2)).view(S, z.shape[1], -1)                             # (S, R, 784)
+    log_lik = (X * F.logsigmoid(logits) + (1 - X) * F.logsigmoid(-logits)).sum(-1)     # (S, R)
+    log_prior = -0.5 * (z ** 2).sum(-1) - m.log(2 * m.pi)                              # (S, R)
+    kl = log_q - log_prior 
+    return (beta * log_lik -kl).mean(0)                                                # (R,)

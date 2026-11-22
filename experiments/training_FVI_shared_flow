@@ -1,0 +1,92 @@
+"""F-VI in the family q = T # N(mu, sigma^2): learn a shared flow T on the path, freeze it, then optimize each image's base independently."""
+import argparse
+
+import torch
+import wandb
+
+from model import Flow2D
+from objectives import elbo_shared_flow
+from utils import load_dataset, load_vae
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+p = argparse.ArgumentParser()
+p.add_argument("--data", type=str, default="morph_val0_1_N1000")
+p.add_argument("--n_layers", type=int, default=8)
+p.add_argument("--hidden_dim_flow", type=int, default=32)
+p.add_argument("--steps_T", type=int, default=5000)            # step A: learning the shared flow 
+                                                               #(learns the parameters of the flow with the parameters nu at the same time)
+
+p.add_argument("--steps_nu", type=int, default=3000)           # step B: per-image F-VI with T frozen: start from new FVI parameters, independant if step A
+p.add_argument("--lr_T", type=float, default=1e-3)
+p.add_argument("--lr_nu", type=float, default=1e-2)
+p.add_argument("--beta0", type=float, default=0.01)            # likelihood tempering during step A
+p.add_argument("--n_restarts", type=int, default=10)
+p.add_argument("--sample_size", type=int, default=32)
+p.add_argument("--seed", type=int, default=0)
+p.add_argument("--project", type=str, default="PGM")
+args = p.parse_args()
+
+torch.manual_seed(args.seed)
+name_vae = "vae_ffg_h100_tanh_seed0"
+run_name = f"optsharedflow_{args.data}_L{args.n_layers}_h{args.hidden_dim_flow}_K{args.n_restarts}_seed{args.seed}"
+config = vars(args) | {"model": "fvi_shared_flow", "vae": name_vae}
+run = wandb.init(project=args.project, name=run_name, config=config)
+
+data = load_dataset(args.data)
+X = data["X"].to(device)                                       # (B, 784)
+B = X.shape[0]
+_, dec = load_vae(name_vae, hidden_dim_enc=[100], hidden_dim_dec=[100], latent_dim=2, act="tanh", input_dim=784)
+dec = dec.to(device).requires_grad_(False)
+
+# step A: the shared flow T and one base per image, optimized together
+T = Flow2D(n_layers=args.n_layers, hidden=args.hidden_dim_flow).to(device)
+layers = T.layers                                              # only the coupling layers are used; T's own base is ignored
+mu = torch.randn(B, 2, device=device).requires_grad_(True)     # starts drawn from the prior
+logsig = torch.zeros(B, 2, device=device, requires_grad=True)
+opt = torch.optim.Adam([{"params": layers.parameters(), "lr": args.lr_T}, {"params": [mu, logsig], "lr": args.lr_nu}])
+sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps_T, eta_min=1e-5)
+for step in range(args.steps_T):
+    beta = min(1.0, args.beta0 + (1 - args.beta0) * 2 * step / args.steps_T)   # ramp to 1 over the first half
+    elbo = elbo_shared_flow(X, dec, layers, mu, logsig, args.sample_size, beta)
+    loss = -elbo.sum()
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
+    sched.step()
+    if step % 10 == 0:
+        wandb.log({"stepA_neg_elbo_annealed": -elbo.mean().item(), "beta": beta}, step=step)
+
+# step B: T frozen, each image's base optimized on its own, from K random starts, we keep the best parameter 
+layers.requires_grad_(False)
+K = args.n_restarts
+XK = X.repeat(K, 1)                                            # (K * B, 784): each image K times
+mu = torch.randn(K * B, 2, device=device).requires_grad_(True)
+logsig = torch.zeros(K * B, 2, device=device, requires_grad=True)
+opt = torch.optim.Adam([mu, logsig], lr=args.lr_nu)
+sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps_nu, eta_min=args.lr_nu / 100)
+for step in range(args.steps_nu):
+    elbo = elbo_shared_flow(XK, dec, layers, mu, logsig, args.sample_size)
+    loss = -elbo.sum()                                         # images and restarts are independent
+    opt.zero_grad()
+    loss.backward()
+    opt.step()
+    sched.step()
+    if step % 10 == 0:
+        best = elbo.view(K, B).max(0).values
+        wandb.log({"stepB_neg_elbo_best_restart": -best.mean().item()}, step=args.steps_T + step)
+
+# best restart of each image, judged on a less noisy estimate
+with torch.no_grad():
+    final = torch.stack([elbo_shared_flow(XK, dec, layers, mu, logsig, S=50) for _ in range(10)]).mean(0).view(K, B)
+    best = final.argmax(0)
+    idx = best * B + torch.arange(B, device=device)
+
+path = f"/kaggle/working/{run_name}.pt"
+torch.save({"alpha": data["alpha"], "mu": mu.detach()[idx].cpu(), "logsig": logsig.detach()[idx].cpu(),
+            "elbo": final.max(0).values.cpu(), "flow_state": T.state_dict(),
+            "n_layers": args.n_layers, "hidden": args.hidden_dim_flow}, path)
+art = wandb.Artifact(name=run_name, type="sharedflow", metadata=config)
+art.add_file(path)
+run.log_artifact(art)
+run.finish()

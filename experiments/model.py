@@ -30,25 +30,24 @@ def make_mlp(in_dim: int, hidden_dims: list, act: str):
     return nn.Sequential(*layers)
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim, hidden_dims, latent_dim, act = 'tanh'):
+    def __init__(self, input_dim, hidden_dim_enc, latent_dim, act = 'tanh'):
         super().__init__()
-        self.trunk = make_mlp(input_dim, hidden_dims, act)
-        self.mu = nn.Linear(hidden_dims[-1], latent_dim)
-        self.logsigma = nn.Linear(hidden_dims[-1], latent_dim)
+        self.trunk = make_mlp(input_dim, hidden_dim_enc, act)
+        self.mu = nn.Linear(hidden_dim_enc[-1], latent_dim)
+        self.logsigma = nn.Linear(hidden_dim_enc[-1], latent_dim)
 
     def forward(self, x):
         h = self.trunk(x)
         mu, logsigma = self.mu(h), self.logsigma(h)
         return mu, logsigma
 
-
 ## Decoder ##
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim, hidden_dims, output_dim, act = 'tanh'):
+    def __init__(self, latent_dim, hidden_dim_dec, output_dim, act = 'tanh'):
         super().__init__()
-        self.trunk = make_mlp(latent_dim, hidden_dims, act)
-        self.logits = nn.Linear(hidden_dims[-1], output_dim)
+        self.trunk = make_mlp(latent_dim, hidden_dim_dec, act)
+        self.logits = nn.Linear(hidden_dim_dec[-1], output_dim)
 
     def forward(self, z):
         h = self.trunk(z)
