@@ -45,3 +45,9 @@ def flow_name(idx, vae_name, split, n_layers=8, hidden=32, seed=0, annealing = F
 def load_dataset(name="mnist_bin", version="v0"):
     #Download the dataset artifact and load the tensors it contains
     return torch.load(os.path.join(load_artifact(name, version), f"{name}.pt"))
+
+def load_run(spec, default_version="latest"):
+    """Load the file name.pt stored in a wandb artifact; spec is "name" or "name:vK". Tensors are loaded on CPU."""
+    name, _, version = spec.partition(":")
+    path = os.path.join(load_artifact(name, version or default_version), f"{name}.pt")
+    return torch.load(path, map_location="cpu", weights_only=False)

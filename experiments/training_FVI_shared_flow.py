@@ -73,8 +73,9 @@ for step in range(args.steps_nu):
     opt.step()
     sched.step()
     if step % 10 == 0:
+        lr_now = opt.param_groups[0]["lr"]
         best = elbo.view(K, B).max(0).values
-        wandb.log({"stepB_neg_elbo_best_restart": -best.mean().item()}, step=args.steps_T + step)
+        wandb.log({"stepB_neg_elbo_best_restart": -best.mean().item(), 'lr': lr_now }, step=args.steps_T + step)
 
 # best restart of each image, judged on a less noisy estimate
 with torch.no_grad():
@@ -85,7 +86,9 @@ with torch.no_grad():
 path = f"/kaggle/working/{run_name}.pt"
 torch.save({"alpha": data["alpha"], "mu": mu.detach()[idx].cpu(), "logsig": logsig.detach()[idx].cpu(),
             "elbo": final.max(0).values.cpu(), "flow_state": T.state_dict(),
-            "n_layers": args.n_layers, "hidden": args.hidden_dim_flow}, path)
+            "n_layers": args.n_layers, "hidden": args.hidden_dim_flow,
+            "mu_all": mu.detach().view(K, B, 2).cpu(), "logsig_all": logsig.detach().view(K, B, 2).cpu(),
+            "elbo_all": final.cpu()}, path)
 art = wandb.Artifact(name=run_name, type="sharedflow", metadata=config)
 art.add_file(path)
 run.log_artifact(art)
