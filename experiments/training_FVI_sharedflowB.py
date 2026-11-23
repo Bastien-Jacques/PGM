@@ -18,6 +18,10 @@ p.add_argument("--data", type=str, default="morph_val0_1_N1000")
 p.add_argument("--steps", type=int, default=300)              # optimization steps per image
 p.add_argument("--lr", type=float, default=1e-2)
 p.add_argument("--sample_size", type=int, default=32)
+
+p.add_argument("--beta0", type=float, default=0.01)            # likelihood tempering during step B
+p.add_argument("--anneal_frac_B", type = float, default = 0.5) # duration of the annealing for step B
+ 
 p.add_argument("--seed", type=int, default=0)
 p.add_argument("--project", type=str, default="PGM")
 args = p.parse_args()
@@ -52,8 +56,9 @@ for n in range(B):
     logsig = nu[:, 2:].clone().requires_grad_(True)
     opt = torch.optim.Adam([mu, logsig], lr=args.lr)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps, eta_min=args.lr / 100)
-    for _ in range(args.steps):
-        loss = -elbo_shared_flow(X[ids], dec, layers, mu, logsig, args.sample_size).sum()
+    for step in range(args.steps):
+        beta = min(1.0, args.beta0 + (1 - args.beta0) * step / (args.anneal_frac_A * args.steps_T))   # ramp to 1 over anneal_frac_A*steps steps 
+        loss = -elbo_shared_flow(x = X[ids], dec=dec, leyares=layers, mu=mu, logsig=logsig, S=args.sample_size, beta=beta).sum()
         opt.zero_grad()
         loss.backward()
         opt.step()

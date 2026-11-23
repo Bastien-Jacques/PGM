@@ -50,7 +50,7 @@ opt = torch.optim.Adam([{"params": layers.parameters(), "lr": args.lr_T}, {"para
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps_T, eta_min=1e-5)
 for step in range(args.steps_T):
     beta = min(1.0, args.beta0 + (1 - args.beta0) * step / (args.anneal_frac_A * args.steps_T))   # ramp to 1 over anneal_frac_A*steps steps 
-    elbo = elbo_shared_flow(X, dec, layers, mu, logsig, args.sample_size, beta)
+    elbo = elbo_shared_flow(x=X, dec=dec, layers=layers, mu=mu, logsig=logsig, S=args.sample_size, beta=beta)
     loss = -elbo.sum()
     opt.zero_grad()
     loss.backward()
