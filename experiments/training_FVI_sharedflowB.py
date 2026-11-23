@@ -65,6 +65,7 @@ for n in range(B):
             e = elbo_shared_flow(X[ids], dec, layers, mu, logsig, S=200)
         wandb.log({"image": n, "neg_elbo_fwd": -e[0].item(), "neg_elbo_bwd": -e[1].item()})
 
+torch.save({"alpha": data["alpha"], "nu_fwd": nu_fwd, "nu_bwd": nu_bwd}, f"/kaggle/working/{run_name}_nu.pt")
 
 @torch.no_grad()
 def evaluate(nu):
@@ -73,5 +74,14 @@ def evaluate(nu):
     nu = nu.to(device)
     return torch.stack([elbo_shared_flow(X, dec, layers, nu[:, :2], nu[:, 2:], S=50) for _ in range(10)]).mean(0).cpu()
 
+elbo_fwd, elbo_bwd = evaluate(nu_fwd), evaluate(nu_bwd)
 
-elbo_fwd, elbo_bwd = evaluate(nu_fwd),
+print(f"mean ELBO: forward {elbo_fwd.mean():.3f}, backward {elbo_bwd.mean():.3f}")
+
+path = f"/kaggle/working/{run_name}.pt"
+torch.save({"alpha": data["alpha"], "nu_fwd": nu_fwd, "nu_bwd": nu_bwd,
+            "elbo_fwd": elbo_fwd, "elbo_bwd": elbo_bwd}, path)
+art = wandb.Artifact(name=run_name, type="sharedflow_continuation", metadata=vars(args))
+art.add_file(path)
+run.log_artifact(art)
+run.finish()
