@@ -1,4 +1,4 @@
-"""Figure 2 of Cremer et al. (2018): exact posterior and approximations for a 2D-latent VAE."""
+"""Figure 2 of Cremer et al. (2018): exact posterior and approximations for a 2D-latent VAE
 import math
 import os
 from utils import load_vae, load_flow, load_dataset, flow_name, load_optimal_ffg
@@ -147,9 +147,122 @@ def main(idxs: list):
         axes[r, 0].text(-0.08, 0.5, name, transform=axes[r, 0].transAxes,
                         ha="right", va="center", fontsize=10, family="serif")
     plt.subplots_adjust(wspace=0.05, hspace=0.15)
-    plt.savefig(f"fig2_{vae}_{split}.png", dpi=200, bbox_inches="tight")
+    plt.savefig(f"fig2_{vae}_{split}.pdf", dpi=200, bbox_inches="tight")
     plt.show()
 
 
 if __name__ == "__main__":
     main(idxs = [0, 1, 2, 1056, 394, 221, 291 ])
+"""
+
+"""True posterior vs shared-flow q along the morphing path, around the mode switch"""
+import math as m
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+from model import Flow2D
+from utils import load_dataset, load_run, load_vae
+
+data_name = "morph_val0_1_N1000"
+flow_run = f"optsharedflow_{data_name}_L8_h32_K10_seed0"
+cont_run = f"cont_{flow_run}_steps300"
+alphas = [0.20, 0.28, 0.31, 0.33, 0.35, 0.40, 0.50]
+G = 800                                   # fine grid resolution
+margin = 0.5                              # margin around the posterior mass
+levels_rel = [0.01, 0.03, 0.1, 0.2, 0.35, 0.5, 0.7, 0.9]    # contour levels relative to the max density
+
+
+@torch.no_grad()
+def log_joint_grid(X, dec, zz, chunk=20000):
+    """log p(x, z) for each image of X on each grid point, computed by chunks of the grid."""
+    out = []
+    for zc in zz.split(chunk):
+        logits = dec(zc)
+        ll = X @ F.logsigmoid(logits).T + (1 - X) @ F.logsigmoid(-logits).T
+        out.append(ll - 0.5 * (zc ** 2).sum(-1) - m.log(2 * m.pi))
+    return torch.cat(out, 1)                                         # (n_images, n_grid)
+
+
+def grid(lo, hi, G):
+    g1, g2 = torch.linspace(lo[0], hi[0], G), torch.linspace(lo[1], hi[1], G)
+    Z1, Z2 = torch.meshgrid(g1, g2, indexing="xy")
+    cell = (g1[1] - g1[0]) * (g2[1] - g2[0])
+    return Z1, Z2, torch.stack([Z1.flatten(), Z2.flatten()], 1), cell.item()
+
+
+def draw(ax, Z1, Z2, dens, cmap):
+    d = dens.numpy()
+    ax.contour(Z1.numpy(), Z2.numpy(), d, levels=d.max() * np.array(levels_rel), cmap=cmap, linewidths=1.0)
+
+@torch.no_grad()
+def kl_along_path(data, dec, c, ffg, lo=(-4, -4), hi=(4, 4), G=400):
+    """KL(q || posterior) = log p(x) - ELBO for every image of the path."""
+    _, _, zz, cell = grid(list(lo), list(hi), G)
+    log_px = torch.logsumexp(log_joint_grid(data["X"], dec, zz), 1) + m.log(cell)
+    kl_flow = log_px - torch.maximum(c["elbo_fwd"], c["elbo_bwd"])
+    kl_ffg = log_px - ffg["elbo"]
+    return kl_flow, kl_ffg
+
+@torch.no_grad()
+def main():
+    data, run, c = load_dataset(data_name), load_run(flow_run), load_run(cont_run)
+    _, dec = load_vae("vae_ffg_h100_tanh_seed0", hidden_dim_enc=[100], hidden_dim_dec=[100],
+                      latent_dim=2, act="tanh", input_dim=784)
+    T = Flow2D(n_layers=run["n_layers"], hidden=run["hidden"])
+    T.load_state_dict(run["flow_state"])
+
+    idx = [(data["alpha"] - a).abs().argmin().item() for a in alphas]
+    X = data["X"][idx]
+
+    # common window around the mass of the true posteriors
+    _, _, zz, _ = grid([-4, -4], [4, 4], 200)
+    post = torch.softmax(log_joint_grid(X, dec, zz), 1)
+    keep = zz[(post > 1e-4 * post.max(1, keepdim=True).values).any(0)]
+    lo, hi = (keep.min(0).values - margin).tolist(), (keep.max(0).values + margin).tolist()
+
+    Z1, Z2, zz, cell = grid(lo, hi, G)
+    log_joint = log_joint_grid(X, dec, zz)
+    log_px = torch.logsumexp(log_joint, 1) + m.log(cell)
+    post = torch.exp(log_joint - log_px[:, None])                    # normalized true posterior densities
+
+    rows = [("True posterior", None, None), ("Shared flow, forward", c["nu_fwd"], c["elbo_fwd"]),
+            ("Shared flow, backward", c["nu_bwd"], c["elbo_bwd"])]
+    fig, axes = plt.subplots(len(rows), len(alphas), figsize=(2.0 * len(alphas), 2.2 * len(rows)))
+    for j, n in enumerate(idx):
+        p_true = post[j].view(G, G)
+        for i, (name, nu_all, elbo_all) in enumerate(rows):
+            ax = axes[i, j]
+            draw(ax, Z1, Z2, p_true, "Greens")
+            if nu_all is None:
+                ax.set_title(rf"$\alpha = {data['alpha'][n]:.2f}$", fontsize=9)
+            else:
+                T.mu.data, T.logsigma.data = nu_all[n][:2].clone(), nu_all[n][2:].clone()
+                draw(ax, Z1, Z2, torch.exp(T.log_prob(zz)).view(G, G), "Blues")
+                ax.set_title(f"KL = {log_px[j].item() - elbo_all[n].item():.2f}", fontsize=9)
+            ax.set_aspect("equal")
+            ax.axis("off")
+            if j == 0:
+                ax.text(-0.15, 0.5, name, transform=ax.transAxes, ha="right", va="center", fontsize=10, family="serif")
+    fig.tight_layout()
+    fig.savefig("sharedflow_vs_true.pdf", bbox_inches="tight")
+  
+
+    ffg = load_run(f"optffg_{data_name}_initprior_K20_seed0:v1")
+    kl_flow, kl_ffg = kl_along_path(data, dec, c, ffg)
+    fig, ax = plt.subplots(figsize=(6, 2.8))
+    ax.plot(data["alpha"], kl_ffg, color="#a50f15", lw=1.0, label="optimal FFG")
+    ax.plot(data["alpha"], kl_flow, color="#2171b5", lw=1.0, label="shared flow (best of the two sweeps)")
+    ax.axhline(m.log(2), color="gray", lw=0.6, ls="--")
+    ax.set_xlabel(r"$\alpha$"); ax.set_ylabel(r"KL$(q \,\|\, p_\theta(z \mid x))$ (nats)")
+    ax.legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig("kl_path_ffg_vs_sharedflow.pdf", bbox_inches="tight")
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()

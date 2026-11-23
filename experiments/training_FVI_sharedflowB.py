@@ -1,4 +1,5 @@
-"""Continuation along the morphing path for the shared-flow F-VI: T frozen, each base warm-started from the previous image, it is the step B of the training of the FVI flow
+"""Continuation along the morphing path for the shared-flow F-VI: T frozen, each base 
+warm-started from the previous image, it is the step B of the training of the FVI flow
 with a hot start, meaning the optimisation of the FVI parameter nu_n starts at nu_n-1  """
 import argparse
 
