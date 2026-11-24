@@ -20,6 +20,7 @@ p.add_argument("--steps_T", type=int, default=5000)            # step A: learnin
                                                                #(learns the parameters of the flow with the parameters nu at the same time)
 
 p.add_argument("--lr_T", type=float, default=1e-3)
+p.add_argument("--weight", type=float, default=3.0)            # weight of images with alpha in [0.15, 0.6]
 p.add_argument("--lr_nu", type=float, default=1e-2)
 p.add_argument("--beta0", type=float, default=0.01)            # likelihood tempering during step A
 p.add_argument("--anneal_frac_A", type = float, default = 0.5) # fraction of the train where there is annealing. 
@@ -50,7 +51,7 @@ opt = torch.optim.Adam([{"params": layers.parameters(), "lr": args.lr_T}, {"para
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps_T, eta_min=1e-5)
 
 w = torch.ones(B, device=device)
-w[(data["alpha"] >= 0.15) & (data["alpha"] <= 0.6)] = 3.0 #weights on the images
+w[(data["alpha"] >= 0.15) & (data["alpha"] <= 0.6)] = args.weight #weights on the images
 
 #each image with alpha in [0.16, 0.6] has 3 times more weight than others
 
