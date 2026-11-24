@@ -32,7 +32,7 @@ args = p.parse_args()
 
 torch.manual_seed(args.seed)
 name_vae = "vae_ffg_h100_tanh_seed0"
-run_name = f"optsharedflow_{args.data}_L{args.n_layers}_h{args.hidden_dim_flow}_annA{args.anneal_frac_A}_seed{args.seed}"
+run_name = f"optsharedflow_{args.data}_L{args.n_layers}_h{args.hidden_dim_flow}_annA{args.anneal_frac_A}_weight{args.weight}_seed{args.seed}"
 config = vars(args) | {"model": "fvi_shared_flow", "vae": name_vae}
 run = wandb.init(project=args.project, name=run_name, config=config)
 
