@@ -57,7 +57,7 @@ w[(data["alpha"] >= 0.15) & (data["alpha"] <= 0.6)] = args.weight #weights on th
 
 for step in range(args.steps_T):
     beta = min(1.0, args.beta0 + (1 - args.beta0) * step / (args.anneal_frac_A * args.steps_T))   # ramp to 1 over anneal_frac_A*steps steps 
-    elbo = elbo_shared_flow(x=X, dec=dec, layers=layers, mu=mu, logsig=logsig, S=args.sample_size, beta=beta)
+    elbo = elbo_shared_flow(X=X, dec=dec, layers=layers, mu=mu, logsig=logsig, S=args.sample_size, beta=beta)
     loss = -(w * elbo).sum()
     opt.zero_grad()
     loss.backward()
