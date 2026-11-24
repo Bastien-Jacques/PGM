@@ -48,10 +48,16 @@ mu = torch.randn(B, 2, device=device).requires_grad_(True)     # starts drawn fr
 logsig = torch.zeros(B, 2, device=device, requires_grad=True)
 opt = torch.optim.Adam([{"params": layers.parameters(), "lr": args.lr_T}, {"params": [mu, logsig], "lr": args.lr_nu}])
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps_T, eta_min=1e-5)
+
+w = torch.ones(B, device=device)
+w[(data["alpha"] >= 0.15) & (data["alpha"] <= 0.6)] = 3.0 #weights on the images
+
+#each image with alpha in [0.16, 0.6] has 3 times more weight than others
+
 for step in range(args.steps_T):
     beta = min(1.0, args.beta0 + (1 - args.beta0) * step / (args.anneal_frac_A * args.steps_T))   # ramp to 1 over anneal_frac_A*steps steps 
     elbo = elbo_shared_flow(x=X, dec=dec, layers=layers, mu=mu, logsig=logsig, S=args.sample_size, beta=beta)
-    loss = -elbo.sum()
+    loss = -(w * elbo).sum()
     opt.zero_grad()
     loss.backward()
     opt.step()

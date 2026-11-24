@@ -16,6 +16,7 @@ p = argparse.ArgumentParser()
 p.add_argument("--flow_run", type=str, default="optsharedflow_morph_val0_1_N1000_L8_h32_annA0.7_seed0")
 p.add_argument("--data", type=str, default="morph_val0_1_N1000")
 p.add_argument("--steps", type=int, default=500)              # optimization steps per image
+p.add_argument("--steps_zone", type=int, default=1500)
 p.add_argument("--lr", type=float, default=1e-2)
 p.add_argument("--sample_size", type=int, default=32)
 p.add_argument("--beta0", type=float, default=0.01)           # likelihood tempering inside each image
@@ -46,12 +47,14 @@ nu_init = torch.cat([prev["mu"], prev["logsig"]], dim=1)                 # step 
 nu_fwd, nu_bwd = torch.empty(B, 4), torch.empty(B, 4)
 nu = torch.stack([nu_init[0], nu_init[-1]]).to(device)                   # (2, 4)
 for n in range(B):
+    steps_n = args.steps_zone if 0.15 <= data["alpha"][n] <= 0.6 or 0.15 <= data["alpha"][B - 1 - n] <= 0.6 else args.steps
+    #more steps for alpha in [0.15, 0.6]
     ids = [n, B - 1 - n]
     mu = nu[:, :2].clone().requires_grad_(True)
     logsig = nu[:, 2:].clone().requires_grad_(True)
     opt = torch.optim.Adam([mu, logsig], lr=args.lr)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.steps, eta_min=args.lr / 100)
-    for step in range(args.steps):
+    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=steps_n, eta_min=args.lr / 100)
+    for step in range(steps_n):
         beta = min(1.0, args.beta0 + (1 - args.beta0) * step / (args.anneal_frac_B * args.steps))
         loss = -elbo_shared_flow(X[ids], dec, layers, mu, logsig, args.sample_size, beta).sum()
         opt.zero_grad()
