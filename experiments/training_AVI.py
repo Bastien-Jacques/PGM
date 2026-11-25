@@ -23,8 +23,7 @@ p.add_argument("--epochs", type=int, default=300)
 p.add_argument("--init_from_enc", type=str, default=None)        # name of a saved encoder run to start from (same architecture)
 p.add_argument("--seed", type=int, default=0)
 p.add_argument("--family", type=str, default="ffg", choices=["ffg", "sharedflow"])
-p.add_argument("--flow_run", type=str, default=None)             # step A run with the frozen T (shared-flow family)
-p.add_argument("--cont_run", type=str, default=None)             # continuation run: F-VI optimum in the same family
+p.add_argument("--flow_run", type=str, default=None)             # to load the flow parameters 
 p.add_argument("--flow_tag", type=str, default="w5")             # short tag of the flow, for the run name
 p.add_argument("--sample_size", type=int, default=32)
 p.add_argument("--project", type=str, default="PGM")
@@ -116,23 +115,5 @@ for epoch in range(args.epochs):
 meta = config | ({"best_validation": best_val} if X_val is not None else {"best_train_loss": best_train_loss / N})
 art = wandb.Artifact(name=run_name, type="encoder", metadata=meta)
 art.add_file(enc_path)
-
-# shared flow on the path: amortization gap and stiffness of the best encoder, same estimator as the continuation
-if args.family == "sharedflow" and X_val is None and args.cont_run is not None:
-    enc.load_state_dict(torch.load(enc_path, map_location=device))
-    with torch.no_grad():
-        mu, logsig = enc(X)
-        nu = torch.cat([mu, logsig], dim=1)
-        torch.manual_seed(1234)
-        elbo_A = torch.stack([elbo_shared_flow(X, dec, layers, mu, logsig, S=50) for _ in range(10)]).mean(0).cpu()
-        kappa = ((nu[1:] - nu[:-1]).norm(dim=1) / (X[1:] - X[:-1]).norm(dim=1)).max().item()
-    gap = load_run(args.cont_run)["elbo_fwd"] - elbo_A
-    print(f"kappa_hat = {kappa:.1f}, mean gap = {gap.mean():.3f} nats, largest gap = {gap.max():.2f} nats "
-          f"at alpha = {data['alpha'][gap.argmax()]:.3f}")
-    run.summary.update({"kappa_hat": kappa, "mean_gap": gap.mean().item(), "max_gap": gap.max().item()})
-    res_path = f"/kaggle/working/{run_name}_eval.pt"
-    torch.save({"alpha": data["alpha"], "nu": nu.cpu(), "elbo_A": elbo_A, "gap": gap, "kappa": kappa}, res_path)
-    art.add_file(res_path)
-
 run.log_artifact(art)
 run.finish()
