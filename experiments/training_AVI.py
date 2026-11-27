@@ -1,6 +1,7 @@
 """A-VI with a frozen decoder: train a new encoder on a dataset artifact (MNIST or a morphing path),
 in the FFG family or in the shared-flow family q = T# N(mu, sigma^2) with T frozen."""
 import argparse
+import os
 
 import torch
 import wandb
@@ -77,8 +78,11 @@ def neg_elbo(x_batch):
 
 optimizer = torch.optim.Adam(enc.parameters(), lr=args.lr)
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=50)
-enc_path = f"/kaggle/working/{run_name}_enc.pt"
 best_val = float("inf")
+
+out_dir = "/kaggle/working" if os.path.isdir("/kaggle/working") else "/content"
+enc_path = os.path.join(out_dir, f"{run_name}_enc.pt")
+
 best_train_loss = float("inf")
 
 for epoch in range(args.epochs):
